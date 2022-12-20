@@ -1,21 +1,27 @@
 from datetime import datetime
 from hashlib import sha256
 from json import dumps
+from urllib.parse import urlparse
+import requests
 
 # Defining The Blockchain
 class Blockchain:
     def __init__(self):
         self.chain = []
+        self.transactions = []
         self.createBlock(nonce = 1, previousHash = '0'*64) # Creating the Genesis Block
+        self.nodes = set()
 
 
     def createBlock(self, nonce, previousHash):
         block = {
             'index': len(self.chain)+1,
             'nonce': nonce,
+            'transactions': self.transactions,
             'previousHash':previousHash,
-            'timestamp': datetime.now()
+            'timestamp': str(datetime.now())
         }
+        self.transactions = []
         self.chain.append(block)
         return block
 
@@ -56,3 +62,29 @@ class Blockchain:
     
             blockIndex += 1
         return True
+
+    def addTransactions(self, sender, receiver, amount): # adding transaction in the transactions list
+        self.transactions.append({'sender':sender, 'receiver':receiver, 'amount':amount})
+        previousBlock = self.getPreviousBlock()
+        return previousBlock['index'] + 1 # returning the block index in which transactions are to be inserted
+
+    def addNode(self, address): # adding a new node in the network
+        parsedUrl = urlparse(address)
+        self.nodes.add(parsedUrl.netloc) # adding the parsed addess of the node in network
+
+
+    def replaceChain(self): # replacing the chain with the longest valid chain in the network 
+        network = self.nodes
+        longestChain = None
+        maxLength = len(self.chain)
+        for node in network:
+            response = requests.get(f"http://{node}/getChain").json() # calling getChain method of different nodes
+            chain = response['chain']
+            length = response['length']
+            if length > maxLength and self.isChainValid(chain):
+                maxLength = length
+                longestChain = chain
+        if longestChain:
+            self.chain = longestChain
+            return True
+        return False
